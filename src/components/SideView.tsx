@@ -25,15 +25,17 @@ function holePositions(
   const cornerPad = tileSize * 0.18;        // keep holes away from corners
   const usable = tileSize - 2 * cornerPad;
   const fromEdge = 6;                        // hole center distance from tile edge
+  const borderWidth = 1.5;                   // matches TileView borderWidth
+  const contentSize = tileSize - 2 * borderWidth;
 
   return Array.from({ length: count }, (_, i) => {
     const along = cornerPad + (i + 0.5) * usable / count - hr;
 
     switch (direction) {
       case 'top':    return { left: along, top:  fromEdge - hr };
-      case 'bottom': return { left: along, top:  tileSize - fromEdge - hr };
-      case 'left':   return { left: fromEdge - hr,         top: along };
-      case 'right':  return { left: tileSize - fromEdge - hr, top: along };
+      case 'bottom': return { left: along, top:  contentSize - fromEdge - hr };
+      case 'left':   return { left: fromEdge - hr,             top: along };
+      case 'right':  return { left: contentSize - fromEdge - hr, top: along };
     }
   });
 }
