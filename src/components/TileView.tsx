@@ -9,7 +9,9 @@ interface Props {
   tile: Tile;
   size: number;
   onSidePress?: (direction: Direction) => void;
+  onTilePress?: () => void;
   flashing?: boolean;
+  highlighted?: boolean;
 }
 
 const WOOD_COLOR: Record<TileType, string> = {
@@ -35,7 +37,7 @@ function sideHitStyle(direction: Direction, size: number) {
   }
 }
 
-export function TileView({ tile, size, onSidePress, flashing }: Props) {
+export function TileView({ tile, size, onSidePress, onTilePress, flashing, highlighted }: Props) {
   const bg = WOOD_COLOR[tile.type];
   const flashAnim = useRef(new Animated.Value(0)).current;
 
@@ -62,6 +64,15 @@ export function TileView({ tile, size, onSidePress, flashing }: Props) {
         <SideView key={dir} side={tile.sides[dir]} tileSize={size} />
       ))}
 
+      {/* Full-tile press — rendered first so side strips take precedence over it */}
+      {onTilePress && (
+        <TouchableOpacity
+          activeOpacity={0.2}
+          style={StyleSheet.absoluteFill}
+          onPress={onTilePress}
+        />
+      )}
+
       {/* Touchable strips, one per side */}
       {onSidePress && DIRECTIONS.map((dir) => (
         <TouchableOpacity
@@ -75,11 +86,13 @@ export function TileView({ tile, size, onSidePress, flashing }: Props) {
       {/* Flash overlay */}
       <Animated.View
         pointerEvents="none"
-        style={[
-          styles.flashOverlay,
-          { opacity: flashAnim },
-        ]}
+        style={[styles.flashOverlay, { opacity: flashAnim }]}
       />
+
+      {/* Green highlight overlay (static, for valid move targets) */}
+      {highlighted && (
+        <View pointerEvents="none" style={styles.highlightOverlay} />
+      )}
     </View>
   );
 }
@@ -114,5 +127,9 @@ const styles = StyleSheet.create({
   flashOverlay: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(220, 50, 50, 0.45)',
+  },
+  highlightOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(60, 200, 80, 0.45)',
   },
 });

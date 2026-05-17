@@ -9,6 +9,8 @@ export const BOARD_SIZE = 4;
 export const TILE_SIZE =
   (SCREEN_WIDTH - BOARD_PADDING * 2 - TILE_GAP * (BOARD_SIZE - 1)) / BOARD_SIZE;
 
+export const CHIP_SIZE = TILE_SIZE * 0.42;
+
 export const COLORS = {
   // Tile wood tones (subtle distinction by type)
   cornerWood: '#BF7A35',
