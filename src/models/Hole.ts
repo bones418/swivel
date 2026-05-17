@@ -1,8 +1,10 @@
+import { PlayerColor } from '../constants/players';
+
 export interface Hole {
-  /** Zero-based index of this hole within its Side */
   index: number;
+  peg: PlayerColor | null;
 }
 
 export function createHole(index: number): Hole {
-  return { index };
+  return { index, peg: null };
 }
