@@ -12,7 +12,6 @@ interface Props {
   side: Side;
   tileSize: number;
   pegHint?: SidePegHint;
-  battleHighlight?: boolean;
 }
 
 function holePositions(
@@ -29,28 +28,21 @@ function holePositions(
   const contentSize = tileSize - 2 * borderWidth;
 
   return Array.from({ length: count }, (_, i) => {
-    const along = cornerPad + (i + 0.5) * usable / count - hr;
+    // top/right: hole 0 is left/top — count forward.
+    // bottom/left: hole 0 is right/bottom — count backward (clockwise convention).
+    const fwd = cornerPad + (i + 0.5) * usable / count - hr;
+    const bwd = cornerPad + (count - i - 0.5) * usable / count - hr;
 
     switch (direction) {
-      case 'top':    return { left: along, top: fromEdge - hr };
-      case 'bottom': return { left: along, top: contentSize - fromEdge - hr };
-      case 'left':   return { left: fromEdge - hr,             top: along };
-      case 'right':  return { left: contentSize - fromEdge - hr, top: along };
+      case 'top':    return { left: fwd, top: fromEdge - hr };
+      case 'bottom': return { left: bwd, top: contentSize - fromEdge - hr };
+      case 'left':   return { left: fromEdge - hr,               top: bwd };
+      case 'right':  return { left: contentSize - fromEdge - hr, top: fwd };
     }
   });
 }
 
-function battleOverlayStyle(direction: Direction, size: number) {
-  const d = size * 0.28;
-  switch (direction) {
-    case 'top':    return { top: 0,    left: 0,  right: 0,  height: d };
-    case 'bottom': return { bottom: 0, left: 0,  right: 0,  height: d };
-    case 'left':   return { left: 0,   top: d,   bottom: d, width: d };
-    case 'right':  return { right: 0,  top: d,   bottom: d, width: d };
-  }
-}
-
-export function SideView({ side, tileSize, pegHint, battleHighlight }: Props) {
+export function SideView({ side, tileSize, pegHint }: Props) {
   const holeSize = Math.max(7, tileSize * 0.1);
   const positions = holePositions(side.direction, side.holes.length, tileSize, holeSize);
 
@@ -68,15 +60,6 @@ export function SideView({ side, tileSize, pegHint, battleHighlight }: Props) {
           />
         </View>
       ))}
-      {battleHighlight && (
-        <View
-          pointerEvents="none"
-          style={[
-            { position: 'absolute', borderWidth: 2, borderColor: 'white' },
-            battleOverlayStyle(side.direction, tileSize),
-          ]}
-        />
-      )}
     </>
   );
 }

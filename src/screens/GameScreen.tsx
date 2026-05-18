@@ -145,44 +145,49 @@ export function GameScreen({ playerCount, onEndGame }: Props) {
       const loseTileRow    = battle.activeWins ? battle.neighborRow  : battle.tileRow;
       const loseTileCol    = battle.activeWins ? battle.neighborCol  : battle.tileCol;
       const loseDir        = battle.activeWins ? battle.neighborDir  : battle.tileDir;
-      const gainColor      = battle.activeWins
+      const gainColor      = battle.playerWins
         ? PLAYER_DISPLAY[player].color
         : PLAYER_DISPLAY[battle.otherPlayer].color;
-      const loseColor      = battle.activeWins
+      const loseColor      = battle.playerWins
         ? PLAYER_DISPLAY[battle.otherPlayer].color
         : PLAYER_DISPLAY[player].color;
 
-      // Show battle highlight borders on both tiles/sides
-      setBattleHighlights([
-        { tileRow: battle.tileRow,     tileCol: battle.tileCol,     dirs: [battle.tileDir]     },
-        { tileRow: battle.neighborRow, tileCol: battle.neighborCol, dirs: [battle.neighborDir] },
-      ]);
+      // Show battle highlight border spanning both sides
+      setBattleHighlights([{
+        tileRow: battle.tileRow, tileCol: battle.tileCol, tileDir: battle.tileDir,
+        neighborRow: battle.neighborRow, neighborCol: battle.neighborCol,
+      }]);
 
       // Brief pause to show the highlight before peg animation
       setTimeout(() => {
-        // Animate peg appearing on gaining side
-        const appearAnim = new Animated.Value(0);
-        const appearHint: PegAnimHint = { mode: 'appear', color: gainColor, anim: appearAnim };
-        const sidePegHintAppear: SidePegHint = { holeIndex: battle.gainHoleIndex, hint: appearHint };
-        const tilePegHintAppear: TilePegHint = { dir: gainDir, hint: sidePegHintAppear };
-        setPegHint({ tileRow: gainTileRow, tileCol: gainTileCol, hint: tilePegHintAppear });
-
-        Animated.timing(appearAnim, { toValue: 1, duration: 500, useNativeDriver: true }).start(() => {
-          // Commit both gain+lose to state and immediately show disappear hint
-          setGameState(battle.stateAfter);
+        const runDisappear = (afterState: GameState) => {
+          setGameState(afterState);
           const disappearAnim = new Animated.Value(1);
           const disappearHint: PegAnimHint = { mode: 'disappear', color: loseColor, anim: disappearAnim };
           const sidePegHintDisappear: SidePegHint = { holeIndex: battle.loseHoleIndex, hint: disappearHint };
           const tilePegHintDisappear: TilePegHint = { dir: loseDir, hint: sidePegHintDisappear };
-          // Overwrite appear hint with disappear hint in the same batch
           setPegHint({ tileRow: loseTileRow, tileCol: loseTileCol, hint: tilePegHintDisappear });
-
           Animated.timing(disappearAnim, { toValue: 0, duration: 500, useNativeDriver: true }).start(() => {
             setPegHint(null);
             setBattleHighlights([]);
             runNext(battle.stateAfter);
           });
-        });
+        };
+
+        if (battle.gainHoleIndex === -1) {
+          // Winner is already full — skip appear animation, go straight to disappear
+          runDisappear(battle.stateAfter);
+        } else {
+          // Animate peg appearing on gaining side
+          const appearAnim = new Animated.Value(0);
+          const appearHint: PegAnimHint = { mode: 'appear', color: gainColor, anim: appearAnim };
+          const sidePegHintAppear: SidePegHint = { holeIndex: battle.gainHoleIndex, hint: appearHint };
+          const tilePegHintAppear: TilePegHint = { dir: gainDir, hint: sidePegHintAppear };
+          setPegHint({ tileRow: gainTileRow, tileCol: gainTileCol, hint: tilePegHintAppear });
+          Animated.timing(appearAnim, { toValue: 1, duration: 500, useNativeDriver: true }).start(() => {
+            runDisappear(battle.stateAfter);
+          });
+        }
       }, 300);
     }
 

@@ -3,7 +3,7 @@ import { View, StyleSheet, Animated } from 'react-native';
 import { Board } from '../models/Board';
 import { Direction } from '../models/Side';
 import { PlayerColor, PLAYER_DISPLAY } from '../constants/players';
-import { TileView, TilePegHint, TileBattleHighlight } from './TileView';
+import { TileView, TilePegHint } from './TileView';
 import { TokenChip } from './TokenChip';
 import { COLORS, TILE_SIZE, TILE_GAP, BOARD_PADDING, CHIP_SIZE } from '../constants/theme';
 
@@ -42,9 +42,43 @@ export interface BoardPegHint {
 }
 
 export interface BoardBattleHighlight {
-  tileRow: number;
-  tileCol: number;
-  dirs: Direction[];
+  tileRow: number; tileCol: number; tileDir: Direction;
+  neighborRow: number; neighborCol: number;
+}
+
+// Computes a board-relative bounding rect that wraps all holes on both sides
+// of a battle pair. Mirrors the hole-position constants in SideView.
+function battleRect(h: BoardBattleHighlight): { top: number; left: number; width: number; height: number } {
+  const holeSize = Math.max(7, TILE_SIZE * 0.1);
+  const hr = holeSize / 2;
+  const fromEdge = 6;
+  const borderWidth = 1.5;
+  const cornerPad = TILE_SIZE * 0.18;
+  const PAD = 6;
+
+  const { tileRow, tileCol, tileDir, neighborRow, neighborCol } = h;
+
+  if (tileDir === 'top' || tileDir === 'bottom') {
+    const topRow = tileDir === 'top' ? neighborRow : tileRow;
+    const botRow = tileDir === 'top' ? tileRow     : neighborRow;
+    const col    = tileCol;
+
+    const top    = BOARD_PADDING + topRow * (TILE_SIZE + TILE_GAP) + TILE_SIZE - borderWidth - fromEdge - hr - PAD;
+    const bottom = BOARD_PADDING + botRow * (TILE_SIZE + TILE_GAP) + borderWidth + fromEdge + hr + PAD;
+    const left   = BOARD_PADDING + col   * (TILE_SIZE + TILE_GAP) + cornerPad - hr - PAD;
+    const right  = BOARD_PADDING + col   * (TILE_SIZE + TILE_GAP) + TILE_SIZE - cornerPad + hr + PAD;
+    return { top, left, width: right - left, height: bottom - top };
+  } else {
+    const leftCol  = tileDir === 'right' ? tileCol     : neighborCol;
+    const rightCol = tileDir === 'right' ? neighborCol : tileCol;
+    const row      = tileRow;
+
+    const left   = BOARD_PADDING + leftCol  * (TILE_SIZE + TILE_GAP) + TILE_SIZE - borderWidth - fromEdge - hr - PAD;
+    const right  = BOARD_PADDING + rightCol * (TILE_SIZE + TILE_GAP) + borderWidth + fromEdge + hr + PAD;
+    const top    = BOARD_PADDING + row      * (TILE_SIZE + TILE_GAP) + cornerPad - hr - PAD;
+    const bottom = BOARD_PADDING + row      * (TILE_SIZE + TILE_GAP) + TILE_SIZE - cornerPad + hr + PAD;
+    return { top, left, width: right - left, height: bottom - top };
+  }
 }
 
 interface Props {
@@ -94,9 +128,6 @@ export function BoardView({
               pegHint?.tileRow === rowIndex && pegHint?.tileCol === colIndex
                 ? pegHint.hint
                 : undefined;
-            const tileBattleHighlights = battleHighlights
-              ?.filter(b => b.tileRow === rowIndex && b.tileCol === colIndex)
-              .flatMap(b => b.dirs.map(dir => ({ dir })));
 
             return (
               <View
@@ -120,7 +151,6 @@ export function BoardView({
                   highlighted={isHighlighted}
                   rotationDeg={isRotating ? rotatingTile!.rotationDeg : undefined}
                   pegHint={tilePegHint}
-                  battleHighlights={tileBattleHighlights}
                 />
               </View>
             );
@@ -148,6 +178,24 @@ export function BoardView({
           <TokenChip color={PLAYER_DISPLAY[animatingToken.player].color} />
         </Animated.View>
       )}
+
+      {/* Battle highlight — one rect per battle pair, spanning both sides */}
+      {battleHighlights?.map((h, i) => {
+        const r = battleRect(h);
+        return (
+          <View
+            key={i}
+            pointerEvents="none"
+            style={{
+              position: 'absolute',
+              top: r.top, left: r.left,
+              width: r.width, height: r.height,
+              borderWidth: 2.5, borderColor: 'white',
+              borderRadius: 4,
+            }}
+          />
+        );
+      })}
     </View>
   );
 }

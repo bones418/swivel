@@ -10,10 +10,6 @@ export interface TilePegHint {
   hint: SidePegHint;
 }
 
-export interface TileBattleHighlight {
-  dir: Direction;
-}
-
 interface Props {
   tile: Tile;
   size: number;
@@ -21,10 +17,9 @@ interface Props {
   onTilePress?: () => void;
   flashing?: boolean;
   highlighted?: boolean;
-  rotationAnim?: Animated.Value; // 0 → 1; interpolated to degrees in parent
+  rotationAnim?: Animated.Value;
   rotationDeg?: Animated.AnimatedInterpolation<string>;
   pegHint?: TilePegHint;
-  battleHighlights?: TileBattleHighlight[];
 }
 
 const WOOD_COLOR: Record<TileType, string> = {
@@ -49,7 +44,7 @@ function sideHitStyle(direction: Direction, size: number) {
 
 export function TileView({
   tile, size, onSidePress, onTilePress, flashing, highlighted,
-  rotationDeg, pegHint, battleHighlights,
+  rotationDeg, pegHint,
 }: Props) {
   const bg = WOOD_COLOR[tile.type];
   const flashAnim = useRef(new Animated.Value(0)).current;
@@ -84,7 +79,6 @@ export function TileView({
           side={tile.sides[dir]}
           tileSize={size}
           pegHint={pegHint?.dir === dir ? pegHint.hint : undefined}
-          battleHighlight={battleHighlights?.some(b => b.dir === dir)}
         />
       ))}
 
