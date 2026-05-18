@@ -1,30 +1,43 @@
 import React from 'react';
-import { View, StyleSheet } from 'react-native';
+import { View, StyleSheet, Animated } from 'react-native';
 import { PlayerColor, PLAYER_DISPLAY } from '../constants/players';
 import { COLORS } from '../constants/theme';
+
+export type PegAnimHint = {
+  mode: 'appear' | 'disappear';
+  color: string;
+  anim: Animated.Value;
+};
 
 interface Props {
   size: number;
   peg: PlayerColor | null;
+  animHint?: PegAnimHint;
 }
 
-export function HoleView({ size, peg }: Props) {
+export function HoleView({ size, peg, animHint }: Props) {
+  const pegSize = size * 0.65;
+  const pegRadius = size * 0.325;
+
+  const staticColor = peg !== null ? PLAYER_DISPLAY[peg].color : null;
+  const showStatic = peg !== null && animHint?.mode !== 'disappear';
+
   return (
-    <View
-      style={[
-        styles.hole,
-        { width: size, height: size, borderRadius: size / 2 },
-      ]}
-    >
-      {peg !== null && (
-        <View
+    <View style={[styles.hole, { width: size, height: size, borderRadius: size / 2 }]}>
+      {showStatic && (
+        <View style={[styles.peg, { width: pegSize, height: pegSize, borderRadius: pegRadius, backgroundColor: staticColor! }]} />
+      )}
+      {animHint && (
+        <Animated.View
           style={[
             styles.peg,
             {
-              width: size * 0.65,
-              height: size * 0.65,
-              borderRadius: size * 0.325,
-              backgroundColor: PLAYER_DISPLAY[peg].color,
+              width: pegSize,
+              height: pegSize,
+              borderRadius: pegRadius,
+              backgroundColor: animHint.color,
+              opacity: animHint.anim,
+              position: 'absolute',
             },
           ]}
         />
