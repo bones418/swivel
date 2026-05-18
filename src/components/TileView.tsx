@@ -2,8 +2,17 @@ import React, { useEffect, useRef } from 'react';
 import { View, StyleSheet, TouchableOpacity, Animated } from 'react-native';
 import { Tile, TileType } from '../models/Tile';
 import { Direction } from '../models/Side';
-import { SideView } from './SideView';
+import { SideView, SidePegHint } from './SideView';
 import { COLORS } from '../constants/theme';
+
+export interface TilePegHint {
+  dir: Direction;
+  hint: SidePegHint;
+}
+
+export interface TileBattleHighlight {
+  dir: Direction;
+}
 
 interface Props {
   tile: Tile;
@@ -12,6 +21,10 @@ interface Props {
   onTilePress?: () => void;
   flashing?: boolean;
   highlighted?: boolean;
+  rotationAnim?: Animated.Value; // 0 → 1; interpolated to degrees in parent
+  rotationDeg?: Animated.AnimatedInterpolation<string>;
+  pegHint?: TilePegHint;
+  battleHighlights?: TileBattleHighlight[];
 }
 
 const WOOD_COLOR: Record<TileType, string> = {
@@ -22,9 +35,6 @@ const WOOD_COLOR: Record<TileType, string> = {
 
 const DIRECTIONS: Direction[] = ['top', 'right', 'bottom', 'left'];
 
-// Each side strip covers 28% of tile size along the perpendicular axis,
-// anchored to its edge. Left/right strips inset top/bottom by 28% so
-// corner overlaps go to top/bottom.
 const SIDE_HIT_RATIO = 0.28;
 
 function sideHitStyle(direction: Direction, size: number) {
@@ -37,13 +47,15 @@ function sideHitStyle(direction: Direction, size: number) {
   }
 }
 
-export function TileView({ tile, size, onSidePress, onTilePress, flashing, highlighted }: Props) {
+export function TileView({
+  tile, size, onSidePress, onTilePress, flashing, highlighted,
+  rotationDeg, pegHint, battleHighlights,
+}: Props) {
   const bg = WOOD_COLOR[tile.type];
   const flashAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     if (!flashing) return;
-    // Two pulses of soft red overlay
     Animated.sequence([
       Animated.timing(flashAnim, { toValue: 1, duration: 80,  useNativeDriver: true }),
       Animated.timing(flashAnim, { toValue: 0, duration: 120, useNativeDriver: true }),
@@ -52,8 +64,14 @@ export function TileView({ tile, size, onSidePress, onTilePress, flashing, highl
     ]).start();
   }, [flashing]);
 
+  const tileStyle = [
+    styles.tile,
+    { width: size, height: size, backgroundColor: bg },
+    rotationDeg ? { transform: [{ rotate: rotationDeg }] } : undefined,
+  ];
+
   return (
-    <View style={[styles.tile, { width: size, height: size, backgroundColor: bg }]}>
+    <Animated.View style={tileStyle}>
       {/* Wood grain */}
       <View style={[styles.grain, styles.grainDark,  { top: size * 0.28 }]} />
       <View style={[styles.grain, styles.grainLight, { top: size * 0.55 }]} />
@@ -61,10 +79,16 @@ export function TileView({ tile, size, onSidePress, onTilePress, flashing, highl
 
       {/* Holes */}
       {DIRECTIONS.map((dir) => (
-        <SideView key={dir} side={tile.sides[dir]} tileSize={size} />
+        <SideView
+          key={dir}
+          side={tile.sides[dir]}
+          tileSize={size}
+          pegHint={pegHint?.dir === dir ? pegHint.hint : undefined}
+          battleHighlight={battleHighlights?.some(b => b.dir === dir)}
+        />
       ))}
 
-      {/* Full-tile press — rendered first so side strips take precedence over it */}
+      {/* Full-tile press */}
       {onTilePress && (
         <TouchableOpacity
           activeOpacity={0.2}
@@ -89,11 +113,11 @@ export function TileView({ tile, size, onSidePress, onTilePress, flashing, highl
         style={[styles.flashOverlay, { opacity: flashAnim }]}
       />
 
-      {/* Green highlight overlay (static, for valid move targets) */}
+      {/* Green highlight overlay */}
       {highlighted && (
         <View pointerEvents="none" style={styles.highlightOverlay} />
       )}
-    </View>
+    </Animated.View>
   );
 }
 

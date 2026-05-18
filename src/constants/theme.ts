@@ -4,7 +4,7 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 export const BOARD_PADDING = 20;
 export const TILE_GAP = 6;
-export const BOARD_SIZE = 4;
+export const BOARD_SIZE = 3;
 
 export const TILE_SIZE =
   (SCREEN_WIDTH - BOARD_PADDING * 2 - TILE_GAP * (BOARD_SIZE - 1)) / BOARD_SIZE;

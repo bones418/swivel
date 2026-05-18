@@ -1,11 +1,18 @@
 import React from 'react';
 import { View } from 'react-native';
 import { Side, Direction } from '../models/Side';
-import { HoleView } from './HoleView';
+import { HoleView, PegAnimHint } from './HoleView';
+
+export interface SidePegHint {
+  holeIndex: number;
+  hint: PegAnimHint;
+}
 
 interface Props {
   side: Side;
   tileSize: number;
+  pegHint?: SidePegHint;
+  battleHighlight?: boolean;
 }
 
 function holePositions(
@@ -33,7 +40,17 @@ function holePositions(
   });
 }
 
-export function SideView({ side, tileSize }: Props) {
+function battleOverlayStyle(direction: Direction, size: number) {
+  const d = size * 0.28;
+  switch (direction) {
+    case 'top':    return { top: 0,    left: 0,  right: 0,  height: d };
+    case 'bottom': return { bottom: 0, left: 0,  right: 0,  height: d };
+    case 'left':   return { left: 0,   top: d,   bottom: d, width: d };
+    case 'right':  return { right: 0,  top: d,   bottom: d, width: d };
+  }
+}
+
+export function SideView({ side, tileSize, pegHint, battleHighlight }: Props) {
   const holeSize = Math.max(7, tileSize * 0.1);
   const positions = holePositions(side.direction, side.holes.length, tileSize, holeSize);
 
@@ -44,9 +61,22 @@ export function SideView({ side, tileSize }: Props) {
           key={hole.index}
           style={{ position: 'absolute', left: positions[i].left, top: positions[i].top }}
         >
-          <HoleView size={holeSize} peg={hole.peg} />
+          <HoleView
+            size={holeSize}
+            peg={hole.peg}
+            animHint={pegHint?.holeIndex === i ? pegHint.hint : undefined}
+          />
         </View>
       ))}
+      {battleHighlight && (
+        <View
+          pointerEvents="none"
+          style={[
+            { position: 'absolute', borderWidth: 2, borderColor: 'white' },
+            battleOverlayStyle(side.direction, tileSize),
+          ]}
+        />
+      )}
     </>
   );
 }

@@ -3,7 +3,7 @@ import { View, StyleSheet, Animated } from 'react-native';
 import { Board } from '../models/Board';
 import { Direction } from '../models/Side';
 import { PlayerColor, PLAYER_DISPLAY } from '../constants/players';
-import { TileView } from './TileView';
+import { TileView, TilePegHint, TileBattleHighlight } from './TileView';
 import { TokenChip } from './TokenChip';
 import { COLORS, TILE_SIZE, TILE_GAP, BOARD_PADDING, CHIP_SIZE } from '../constants/theme';
 
@@ -29,6 +29,24 @@ export interface AnimatingToken {
   pos: Animated.ValueXY;
 }
 
+export interface RotatingTileInfo {
+  row: number;
+  col: number;
+  rotationDeg: Animated.AnimatedInterpolation<string>;
+}
+
+export interface BoardPegHint {
+  tileRow: number;
+  tileCol: number;
+  hint: TilePegHint;
+}
+
+export interface BoardBattleHighlight {
+  tileRow: number;
+  tileCol: number;
+  dirs: Direction[];
+}
+
 interface Props {
   board: Board;
   onSidePress?: (row: number, col: number, direction: Direction) => void;
@@ -37,6 +55,9 @@ interface Props {
   highlightedTiles?: TileCoord[];
   tokens?: TokenInfo[];
   animatingToken?: AnimatingToken;
+  rotatingTile?: RotatingTileInfo;
+  pegHint?: BoardPegHint;
+  battleHighlights?: BoardBattleHighlight[];
 }
 
 // Top-left position of a chip within the board View's own coordinate space.
@@ -50,6 +71,7 @@ function chipTL(row: number, col: number) {
 
 export function BoardView({
   board, onSidePress, onTilePress, flashTarget, highlightedTiles, tokens, animatingToken,
+  rotatingTile, pegHint, battleHighlights,
 }: Props) {
   const tileSize = useMemo(() => TILE_SIZE, []);
 
@@ -66,6 +88,16 @@ export function BoardView({
             const isHighlighted = highlightedTiles?.some(
               t => t.row === rowIndex && t.col === colIndex
             ) ?? false;
+            const isRotating =
+              rotatingTile?.row === rowIndex && rotatingTile?.col === colIndex;
+            const tilePegHint =
+              pegHint?.tileRow === rowIndex && pegHint?.tileCol === colIndex
+                ? pegHint.hint
+                : undefined;
+            const tileBattleHighlights = battleHighlights
+              ?.filter(b => b.tileRow === rowIndex && b.tileCol === colIndex)
+              .flatMap(b => b.dirs.map(dir => ({ dir })));
+
             return (
               <View
                 key={`${tile.row}-${tile.col}`}
@@ -86,6 +118,9 @@ export function BoardView({
                   }
                   flashing={isFlashing}
                   highlighted={isHighlighted}
+                  rotationDeg={isRotating ? rotatingTile!.rotationDeg : undefined}
+                  pegHint={tilePegHint}
+                  battleHighlights={tileBattleHighlights}
                 />
               </View>
             );

@@ -8,7 +8,14 @@ import {
   Vibration,
   Animated,
 } from 'react-native';
-import { BoardView, TokenInfo, AnimatingToken } from '../components/BoardView';
+import {
+  BoardView,
+  TokenInfo,
+  AnimatingToken,
+  RotatingTileInfo,
+  BoardPegHint,
+  BoardBattleHighlight,
+} from '../components/BoardView';
 import { Direction } from '../models/Side';
 import {
   GameState,
@@ -20,10 +27,16 @@ import {
   moveToken,
   hasValidSides,
   advanceTurn,
+  rotateTileState,
+  computeBattles,
+  BattleInfo,
   TokenPosition,
 } from '../game/GameState';
 import { PlayerColor, PLAYER_COLORS, PLAYER_DISPLAY } from '../constants/players';
 import { COLORS, TILE_SIZE, TILE_GAP, BOARD_PADDING, CHIP_SIZE } from '../constants/theme';
+import { TilePegHint } from '../components/TileView';
+import { SidePegHint } from '../components/SideView';
+import { PegAnimHint } from '../components/HoleView';
 
 // Must match STARTING_POSITIONS in GameState.ts
 const TOKEN_STARTS = [
@@ -33,7 +46,6 @@ const TOKEN_STARTS = [
   { row: 2, col: 1 },
 ];
 
-// Top-left position of a chip within the board's coordinate space
 function chipTL(row: number, col: number) {
   return {
     x: BOARD_PADDING + col * (TILE_SIZE + TILE_GAP) + (TILE_SIZE - CHIP_SIZE) / 2,
@@ -60,22 +72,27 @@ export function GameScreen({ playerCount, onEndGame }: Props) {
   const [isAnimating, setIsAnimating] = useState(false);
   const flashKeyRef = useRef(0);
 
-  // A single ValueXY used only while a token is gliding; null otherwise.
+  // Token glide animation
   const animTokenPos = useRef<Animated.ValueXY | null>(null);
 
-  const players = useMemo(() => PLAYER_COLORS.slice(0, playerCount), [playerCount]);
+  // Tile rotation animation
+  const rotAnim = useRef<Animated.Value | null>(null);
+  const [rotatingTile, setRotatingTile] = useState<RotatingTileInfo | null>(null);
 
+  // Battle display state
+  const [pegHint, setPegHint] = useState<BoardPegHint | null>(null);
+  const [battleHighlights, setBattleHighlights] = useState<BoardBattleHighlight[]>([]);
+
+  const players = useMemo(() => PLAYER_COLORS.slice(0, playerCount), [playerCount]);
   const player = currentPlayer(gameState);
   const { color: playerColor, name: playerName } = PLAYER_DISPLAY[player];
 
-  // Green-highlighted tiles
   const highlightedTiles = useMemo((): TokenPosition[] => {
     if (pendingMove) return [pendingMove];
     if (gameState.turnPhase === 'moveToken') return getValidMoveTargets(gameState);
     return [gameState.tokenPositions[player]];
   }, [gameState, pendingMove, player]);
 
-  // Static token list — hide the moving player's chip while animation runs
   const tokens = useMemo((): TokenInfo[] =>
     players
       .filter(p => !isAnimating || p !== player)
@@ -87,7 +104,6 @@ export function GameScreen({ playerCount, onEndGame }: Props) {
     [players, gameState, isAnimating, player],
   );
 
-  // Animated token — only during movement
   const animatingToken = useMemo((): AnimatingToken | undefined => {
     if (!isAnimating || !animTokenPos.current) return undefined;
     return { player, pos: animTokenPos.current };
@@ -99,6 +115,108 @@ export function GameScreen({ playerCount, onEndGame }: Props) {
     setFlashTarget({ row, col, key: flashKeyRef.current });
     setTimeout(() => setFlashTarget(null), 600);
   }, []);
+
+  // Run battle sequence (called after rotation state is applied)
+  const runBattles = useCallback((battles: BattleInfo[], afterState: GameState) => {
+    if (battles.length === 0) {
+      setGameState(advanceTurn(afterState));
+      setIsAnimating(false);
+      return;
+    }
+
+    let idx = 0;
+
+    function runNext(state: GameState) {
+      if (idx >= battles.length) {
+        setBattleHighlights([]);
+        setPegHint(null);
+        setGameState(advanceTurn(state));
+        setIsAnimating(false);
+        return;
+      }
+
+      const battle = battles[idx];
+      idx++;
+
+      // Determine gain/lose tile+side info
+      const gainTileRow    = battle.activeWins ? battle.tileRow      : battle.neighborRow;
+      const gainTileCol    = battle.activeWins ? battle.tileCol      : battle.neighborCol;
+      const gainDir        = battle.activeWins ? battle.tileDir      : battle.neighborDir;
+      const loseTileRow    = battle.activeWins ? battle.neighborRow  : battle.tileRow;
+      const loseTileCol    = battle.activeWins ? battle.neighborCol  : battle.tileCol;
+      const loseDir        = battle.activeWins ? battle.neighborDir  : battle.tileDir;
+      const gainColor      = battle.activeWins
+        ? PLAYER_DISPLAY[player].color
+        : PLAYER_DISPLAY[battle.otherPlayer].color;
+      const loseColor      = battle.activeWins
+        ? PLAYER_DISPLAY[battle.otherPlayer].color
+        : PLAYER_DISPLAY[player].color;
+
+      // Show battle highlight borders on both tiles/sides
+      setBattleHighlights([
+        { tileRow: battle.tileRow,     tileCol: battle.tileCol,     dirs: [battle.tileDir]     },
+        { tileRow: battle.neighborRow, tileCol: battle.neighborCol, dirs: [battle.neighborDir] },
+      ]);
+
+      // Brief pause to show the highlight before peg animation
+      setTimeout(() => {
+        // Animate peg appearing on gaining side
+        const appearAnim = new Animated.Value(0);
+        const appearHint: PegAnimHint = { mode: 'appear', color: gainColor, anim: appearAnim };
+        const sidePegHintAppear: SidePegHint = { holeIndex: battle.gainHoleIndex, hint: appearHint };
+        const tilePegHintAppear: TilePegHint = { dir: gainDir, hint: sidePegHintAppear };
+        setPegHint({ tileRow: gainTileRow, tileCol: gainTileCol, hint: tilePegHintAppear });
+
+        Animated.timing(appearAnim, { toValue: 1, duration: 500, useNativeDriver: true }).start(() => {
+          // Commit both gain+lose to state and immediately show disappear hint
+          setGameState(battle.stateAfter);
+          const disappearAnim = new Animated.Value(1);
+          const disappearHint: PegAnimHint = { mode: 'disappear', color: loseColor, anim: disappearAnim };
+          const sidePegHintDisappear: SidePegHint = { holeIndex: battle.loseHoleIndex, hint: disappearHint };
+          const tilePegHintDisappear: TilePegHint = { dir: loseDir, hint: sidePegHintDisappear };
+          // Overwrite appear hint with disappear hint in the same batch
+          setPegHint({ tileRow: loseTileRow, tileCol: loseTileCol, hint: tilePegHintDisappear });
+
+          Animated.timing(disappearAnim, { toValue: 0, duration: 500, useNativeDriver: true }).start(() => {
+            setPegHint(null);
+            setBattleHighlights([]);
+            runNext(battle.stateAfter);
+          });
+        });
+      }, 300);
+    }
+
+    runNext(afterState);
+  }, [player]);
+
+  const handleRotate = useCallback((clockwise: boolean) => {
+    if (isAnimating || gameState.turnPhase !== 'rotateTile') return;
+
+    const tokenPos = gameState.tokenPositions[player];
+    const { row, col } = tokenPos;
+
+    setIsAnimating(true);
+
+    const anim = new Animated.Value(0);
+    rotAnim.current = anim;
+    const rotationDeg = anim.interpolate({
+      inputRange:  [0, 1],
+      outputRange: ['0deg', clockwise ? '90deg' : '-90deg'],
+    });
+    setRotatingTile({ row, col, rotationDeg });
+
+    Animated.timing(anim, { toValue: 1, duration: 1000, useNativeDriver: true }).start(() => {
+      rotAnim.current = null;
+      setRotatingTile(null);
+
+      const rotated = rotateTileState(gameState, row, col, clockwise);
+      // Apply rotated state immediately so the tile renders correctly from data
+      setGameState(rotated);
+
+      const battles = computeBattles(rotated, row, col);
+      runBattles(battles, rotated);
+    });
+  }, [gameState, isAnimating, player, runBattles]);
 
   const handleTilePress = useCallback(
     (row: number, col: number) => {
@@ -115,13 +233,11 @@ export function GameScreen({ playerCount, onEndGame }: Props) {
       const isSameTile = tokenPos.row === row && tokenPos.col === col;
 
       if (isSameTile) {
-        // Forced stay — no adjacent moves available, skip animation
         const newState = moveToken(gameState, row, col);
-        setGameState(hasValidSides(newState) ? newState : advanceTurn(newState));
+        setGameState(hasValidSides(newState) ? newState : { ...newState, turnPhase: 'rotateTile' });
         return;
       }
 
-      // Start glide animation
       const from = chipTL(tokenPos.row, tokenPos.col);
       animTokenPos.current = new Animated.ValueXY({ x: from.x, y: from.y });
       const to = chipTL(row, col);
@@ -138,7 +254,7 @@ export function GameScreen({ playerCount, onEndGame }: Props) {
         setIsAnimating(false);
         setPendingMove(null);
         const newState = moveToken(gameState, row, col);
-        setGameState(hasValidSides(newState) ? newState : advanceTurn(newState));
+        setGameState(hasValidSides(newState) ? newState : { ...newState, turnPhase: 'rotateTile' });
       });
     },
     [gameState, isAnimating, player, triggerFlash],
@@ -150,8 +266,7 @@ export function GameScreen({ playerCount, onEndGame }: Props) {
 
       if (gameState.turnPhase === 'moveToken') {
         handleTilePress(row, col);
-      } else {
-        // placePeg phase — only valid on the player's current tile
+      } else if (gameState.turnPhase === 'placePeg') {
         const tokenPos = gameState.tokenPositions[player];
         if (row !== tokenPos.row || col !== tokenPos.col) {
           triggerFlash(row, col);
@@ -166,6 +281,8 @@ export function GameScreen({ playerCount, onEndGame }: Props) {
     },
     [gameState, isAnimating, player, handleTilePress, triggerFlash],
   );
+
+  const isRotatePhase = gameState.turnPhase === 'rotateTile';
 
   return (
     <View style={styles.container}>
@@ -185,15 +302,49 @@ export function GameScreen({ playerCount, onEndGame }: Props) {
         highlightedTiles={highlightedTiles}
         tokens={tokens}
         animatingToken={animatingToken}
+        rotatingTile={rotatingTile ?? undefined}
+        pegHint={pegHint ?? undefined}
+        battleHighlights={battleHighlights.length > 0 ? battleHighlights : undefined}
       />
 
       <View style={styles.turnArea}>
-        <Text style={[styles.turnText, { color: playerColor }]}>
-          {playerName}'s turn
-        </Text>
-        <Text style={[styles.actionText, { color: playerColor }]}>
-          {gameState.turnPhase === 'moveToken' ? 'Move token' : 'Place a peg'}
-        </Text>
+        {isRotatePhase ? (
+          <View style={styles.rotateRow}>
+            <TouchableOpacity
+              style={styles.rotateBtn}
+              onPress={() => handleRotate(false)}
+              disabled={isAnimating}
+            >
+              <Text style={[styles.rotateIcon, { color: playerColor }]}>↺</Text>
+            </TouchableOpacity>
+
+            <View style={styles.turnCenter}>
+              <Text style={[styles.turnText, { color: playerColor }]}>
+                {playerName}'s turn
+              </Text>
+              <Text style={[styles.actionText, { color: playerColor }]}>
+                Rotate tile
+              </Text>
+            </View>
+
+            <TouchableOpacity
+              style={styles.rotateBtn}
+              onPress={() => handleRotate(true)}
+              disabled={isAnimating}
+            >
+              <Text style={[styles.rotateIcon, { color: playerColor }]}>↻</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <>
+            <Text style={[styles.turnText, { color: playerColor }]}>
+              {playerName}'s turn
+            </Text>
+            <Text style={[styles.actionText, { color: playerColor }]}>
+              {gameState.turnPhase === 'moveToken' ? 'Move token' : 'Place a peg'}
+            </Text>
+          </>
+        )}
       </View>
 
       <Modal
@@ -262,6 +413,22 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     letterSpacing: 0.5,
     opacity: 0.85,
+  },
+  rotateRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 20,
+  },
+  rotateBtn: {
+    padding: 8,
+  },
+  rotateIcon: {
+    fontSize: 36,
+    lineHeight: 40,
+  },
+  turnCenter: {
+    alignItems: 'center',
+    gap: 6,
   },
   modalBackdrop: {
     flex: 1,
