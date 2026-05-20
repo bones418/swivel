@@ -9,21 +9,15 @@ type Screen = 'menu' | 'game';
 
 export default function App() {
   const [screen, setScreen] = useState<Screen>('menu');
-  const [playerCount, setPlayerCount] = useState(2);
-
-  function handleStartGame(count: number) {
-    setPlayerCount(count);
-    setScreen('game');
-  }
 
   return (
     <SafeAreaView style={styles.screen}>
       <StatusBar style="light" />
       {screen === 'menu' ? (
-        <MenuScreen onStartGame={handleStartGame} />
+        <MenuScreen onStartGame={() => setScreen('game')} />
       ) : (
         <GameScreen
-          playerCount={playerCount}
+          playerCount={2}
           onEndGame={() => setScreen('menu')}
         />
       )}

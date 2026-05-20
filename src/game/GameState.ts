@@ -5,6 +5,8 @@ import { BOARD_SIZE } from '../constants/theme';
 
 export type TurnPhase = 'moveToken' | 'placePeg' | 'rotateTile';
 
+export const TOTAL_ROUNDS = 25;
+
 export interface TokenPosition {
   row: number;
   col: number;
@@ -16,6 +18,8 @@ export interface GameState {
   currentPlayerIndex: number;
   tokenPositions: Record<PlayerColor, TokenPosition>;
   turnPhase: TurnPhase;
+  roundsRemaining: number;
+  gameOver: boolean;
 }
 
 const STARTING_POSITIONS: TokenPosition[] = [
@@ -35,6 +39,8 @@ export function createGame(playerCount: number): GameState {
     currentPlayerIndex: 0,
     tokenPositions,
     turnPhase: 'moveToken',
+    roundsRemaining: TOTAL_ROUNDS,
+    gameOver: false,
   };
 }
 
@@ -104,11 +110,40 @@ export function hasValidSides(state: GameState): boolean {
 }
 
 export function advanceTurn(state: GameState): GameState {
+  const isEndOfRound = state.currentPlayerIndex === state.players.length - 1;
+  const newRoundsRemaining = isEndOfRound ? state.roundsRemaining - 1 : state.roundsRemaining;
   return {
     ...state,
     currentPlayerIndex: (state.currentPlayerIndex + 1) % state.players.length,
     turnPhase: 'moveToken',
+    roundsRemaining: newRoundsRemaining,
+    gameOver: newRoundsRemaining <= 0,
   };
+}
+
+export function computeScores(state: GameState): Record<PlayerColor, number> {
+  const scores = {} as Record<PlayerColor, number>;
+  state.players.forEach(p => { scores[p] = 0; });
+
+  for (const tileRow of state.board.tiles) {
+    for (const tile of tileRow) {
+      for (const side of Object.values(tile.sides) as Side[]) {
+        const full = side.holes.every(h => h.peg !== null);
+        let sideOwner: PlayerColor | null = null;
+        for (const hole of side.holes) {
+          if (hole.peg !== null && hole.peg in scores) {
+            scores[hole.peg] += hole.index + 1;
+            sideOwner = hole.peg;
+          }
+        }
+        if (full && sideOwner !== null) {
+          scores[sideOwner] += 2;
+        }
+      }
+    }
+  }
+
+  return scores;
 }
 
 // Pegs always fill from hole index 0 upward, regardless of the tile's current rotation.

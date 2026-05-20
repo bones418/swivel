@@ -29,6 +29,7 @@ import {
   advanceTurn,
   rotateTileState,
   computeBattles,
+  computeScores,
   BattleInfo,
   TokenPosition,
 } from '../game/GameState';
@@ -289,6 +290,8 @@ export function GameScreen({ playerCount, onEndGame }: Props) {
 
   const isRotatePhase = gameState.turnPhase === 'rotateTile';
 
+  const scores = computeScores(gameState);
+
   return (
     <View style={styles.container}>
       <View style={styles.topBar}>
@@ -297,6 +300,9 @@ export function GameScreen({ playerCount, onEndGame }: Props) {
           <View style={styles.hamburgerLine} />
           <View style={styles.hamburgerLine} />
         </TouchableOpacity>
+        <Text style={styles.roundsText}>
+          {gameState.roundsRemaining} round{gameState.roundsRemaining !== 1 ? 's' : ''} remaining
+        </Text>
       </View>
 
       <BoardView
@@ -352,6 +358,51 @@ export function GameScreen({ playerCount, onEndGame }: Props) {
         )}
       </View>
 
+      <View style={styles.scoreboard}>
+        {players.map(p => (
+          <View key={p} style={styles.scoreEntry}>
+            <Text style={[styles.scoreLabel, { color: PLAYER_DISPLAY[p].color }]}>
+              {PLAYER_DISPLAY[p].name}
+            </Text>
+            <Text style={[styles.scoreValue, { color: PLAYER_DISPLAY[p].color }]}>
+              {scores[p]}
+            </Text>
+          </View>
+        ))}
+      </View>
+
+      <Modal
+        transparent
+        visible={gameState.gameOver}
+        animationType="fade"
+      >
+        <View style={styles.gameOverBackdrop}>
+          <View style={styles.gameOverCard}>
+            <Text style={styles.gameOverTitle}>Game Over</Text>
+            <View style={styles.gameOverScores}>
+              {[...players]
+                .sort((a, b) => scores[b] - scores[a])
+                .map((p, i) => (
+                  <View key={p} style={styles.gameOverRow}>
+                    <Text style={[styles.gameOverRank, { color: PLAYER_DISPLAY[p].color }]}>
+                      {i + 1}.
+                    </Text>
+                    <Text style={[styles.gameOverName, { color: PLAYER_DISPLAY[p].color }]}>
+                      {PLAYER_DISPLAY[p].name}
+                    </Text>
+                    <Text style={[styles.gameOverScore, { color: PLAYER_DISPLAY[p].color }]}>
+                      {scores[p]} pts
+                    </Text>
+                  </View>
+                ))}
+            </View>
+            <TouchableOpacity style={styles.gameOverBtn} onPress={onEndGame}>
+              <Text style={styles.gameOverBtnText}>Back to Menu</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
       <Modal
         transparent
         visible={menuOpen}
@@ -390,7 +441,16 @@ const styles = StyleSheet.create({
     width: '100%',
     paddingHorizontal: 20,
     paddingBottom: 12,
-    alignItems: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  roundsText: {
+    color: COLORS.titleText,
+    fontSize: 14,
+    fontWeight: '600',
+    letterSpacing: 0.5,
+    opacity: 0.9,
   },
   menuButton: {
     padding: 8,
@@ -434,6 +494,92 @@ const styles = StyleSheet.create({
   turnCenter: {
     alignItems: 'center',
     gap: 6,
+  },
+  scoreboard: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 24,
+    marginTop: 20,
+    paddingHorizontal: 20,
+  },
+  scoreEntry: {
+    alignItems: 'center',
+    gap: 2,
+    minWidth: 56,
+  },
+  scoreLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    letterSpacing: 0.5,
+    opacity: 0.85,
+  },
+  scoreValue: {
+    fontSize: 22,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
+  gameOverBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.75)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  gameOverCard: {
+    backgroundColor: COLORS.cornerWood,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: COLORS.woodBorder,
+    padding: 28,
+    minWidth: 240,
+    alignItems: 'center',
+    gap: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.6,
+    shadowRadius: 12,
+    elevation: 20,
+  },
+  gameOverTitle: {
+    color: COLORS.titleText,
+    fontSize: 26,
+    fontWeight: '800',
+    letterSpacing: 1,
+  },
+  gameOverScores: {
+    width: '100%',
+    gap: 10,
+  },
+  gameOverRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  gameOverRank: {
+    fontSize: 16,
+    fontWeight: '700',
+    width: 22,
+  },
+  gameOverName: {
+    fontSize: 16,
+    fontWeight: '600',
+    flex: 1,
+  },
+  gameOverScore: {
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  gameOverBtn: {
+    backgroundColor: COLORS.woodBorder,
+    borderRadius: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 28,
+    marginTop: 4,
+  },
+  gameOverBtnText: {
+    color: COLORS.titleText,
+    fontSize: 16,
+    fontWeight: '700',
+    letterSpacing: 0.5,
   },
   modalBackdrop: {
     flex: 1,
