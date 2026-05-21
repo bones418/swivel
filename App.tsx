@@ -1,26 +1,56 @@
 import React, { useState } from 'react';
-import { StyleSheet, SafeAreaView } from 'react-native';
+import { StyleSheet, SafeAreaView, View, ActivityIndicator } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
+import { AuthProvider, useAuth } from './src/context/AuthContext';
 import { MenuScreen } from './src/screens/MenuScreen';
 import { GameScreen } from './src/screens/GameScreen';
+import { AuthScreen } from './src/screens/AuthScreen';
 import { COLORS } from './src/constants/theme';
 
-type Screen = 'menu' | 'game';
+type Screen = 'menu' | 'game' | 'auth';
 
-export default function App() {
+function AppNavigator() {
+  const { loading } = useAuth();
   const [screen, setScreen] = useState<Screen>('menu');
 
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator color={COLORS.titleText} size="large" />
+      </View>
+    );
+  }
+
+  if (screen === 'game') {
+    return (
+      <GameScreen
+        playerCount={2}
+        onEndGame={() => setScreen('menu')}
+      />
+    );
+  }
+
+  if (screen === 'auth') {
+    return (
+      <AuthScreen onBack={() => setScreen('menu')} onSuccess={() => setScreen('menu')} />
+    );
+  }
+
+  return (
+    <MenuScreen
+      onStartGame={() => setScreen('game')}
+      onShowAuth={() => setScreen('auth')}
+    />
+  );
+}
+
+export default function App() {
   return (
     <SafeAreaView style={styles.screen}>
       <StatusBar style="light" />
-      {screen === 'menu' ? (
-        <MenuScreen onStartGame={() => setScreen('game')} />
-      ) : (
-        <GameScreen
-          playerCount={2}
-          onEndGame={() => setScreen('menu')}
-        />
-      )}
+      <AuthProvider>
+        <AppNavigator />
+      </AuthProvider>
     </SafeAreaView>
   );
 }
@@ -29,5 +59,10 @@ const styles = StyleSheet.create({
   screen: {
     flex: 1,
     backgroundColor: COLORS.screenBg,
+  },
+  loadingContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });
