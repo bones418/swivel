@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef, useMemo } from 'react';
+import React, { useState, useCallback, useRef, useMemo, useEffect } from 'react';
 import {
   View,
   Text,
@@ -34,6 +34,7 @@ import {
   TokenPosition,
 } from '../game/GameState';
 import { PlayerColor, PLAYER_COLORS, PLAYER_DISPLAY } from '../constants/players';
+import { botChooseMove, botChoosePeg, botChooseRotation } from '../game/BotAI';
 import { COLORS, TILE_SIZE, TILE_GAP, BOARD_PADDING, CHIP_SIZE } from '../constants/theme';
 import { TilePegHint } from '../components/TileView';
 import { SidePegHint } from '../components/SideView';
@@ -57,6 +58,7 @@ function chipTL(row: number, col: number) {
 interface Props {
   playerCount: number;
   onEndGame: () => void;
+  botColor?: PlayerColor;
 }
 
 interface FlashTarget {
@@ -65,7 +67,7 @@ interface FlashTarget {
   key: number;
 }
 
-export function GameScreen({ playerCount, onEndGame }: Props) {
+export function GameScreen({ playerCount, onEndGame, botColor }: Props) {
   const [gameState, setGameState] = useState<GameState>(() => createGame(playerCount));
   const [flashTarget, setFlashTarget] = useState<FlashTarget | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -87,6 +89,11 @@ export function GameScreen({ playerCount, onEndGame }: Props) {
   const players = useMemo(() => PLAYER_COLORS.slice(0, playerCount), [playerCount]);
   const player = currentPlayer(gameState);
   const { color: playerColor, name: playerName } = PLAYER_DISPLAY[player];
+
+  const humanColor = botColor
+    ? players.find(p => p !== botColor) ?? players[0]
+    : null;
+  const isBotTurn = !!botColor && player === botColor && !gameState.gameOver;
 
   const highlightedTiles = useMemo((): TokenPosition[] => {
     if (pendingMove) return [pendingMove];
@@ -288,6 +295,29 @@ export function GameScreen({ playerCount, onEndGame }: Props) {
     [gameState, isAnimating, player, handleTilePress, triggerFlash],
   );
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!isBotTurn || isAnimating) return;
+    const DELAY = 700;
+    if (gameState.turnPhase === 'moveToken') {
+      const target = botChooseMove(gameState);
+      const t = setTimeout(() => handleTilePress(target.row, target.col), DELAY);
+      return () => clearTimeout(t);
+    }
+    if (gameState.turnPhase === 'placePeg') {
+      const dir = botChoosePeg(gameState, botColor!);
+      if (!dir) return;
+      const pos = gameState.tokenPositions[botColor!];
+      const t = setTimeout(() => handleSidePress(pos.row, pos.col, dir), DELAY);
+      return () => clearTimeout(t);
+    }
+    if (gameState.turnPhase === 'rotateTile') {
+      const clockwise = botChooseRotation(gameState, botColor!);
+      const t = setTimeout(() => handleRotate(clockwise), DELAY);
+      return () => clearTimeout(t);
+    }
+  }, [isBotTurn, isAnimating, gameState.turnPhase, gameState.currentPlayerIndex]);
+
   const isRotatePhase = gameState.turnPhase === 'rotateTile';
 
   const scores = computeScores(gameState);
@@ -307,8 +337,8 @@ export function GameScreen({ playerCount, onEndGame }: Props) {
 
       <BoardView
         board={gameState.board}
-        onSidePress={handleSidePress}
-        onTilePress={gameState.turnPhase === 'moveToken' ? handleTilePress : undefined}
+        onSidePress={isBotTurn ? undefined : handleSidePress}
+        onTilePress={isBotTurn || gameState.turnPhase !== 'moveToken' ? undefined : handleTilePress}
         flashTarget={flashTarget}
         highlightedTiles={highlightedTiles}
         tokens={tokens}
@@ -324,24 +354,24 @@ export function GameScreen({ playerCount, onEndGame }: Props) {
             <TouchableOpacity
               style={styles.rotateBtn}
               onPress={() => handleRotate(false)}
-              disabled={isAnimating}
+              disabled={isAnimating || isBotTurn}
             >
               <Text style={[styles.rotateIcon, { color: playerColor }]}>↺</Text>
             </TouchableOpacity>
 
             <View style={styles.turnCenter}>
               <Text style={[styles.turnText, { color: playerColor }]}>
-                {playerName}'s turn
+                {playerName}{botColor ? (isBotTurn ? ' (Bot)' : ' (You)') : ''}
               </Text>
               <Text style={[styles.actionText, { color: playerColor }]}>
-                Rotate tile
+                {isBotTurn ? 'Thinking...' : 'Rotate tile'}
               </Text>
             </View>
 
             <TouchableOpacity
               style={styles.rotateBtn}
               onPress={() => handleRotate(true)}
-              disabled={isAnimating}
+              disabled={isAnimating || isBotTurn}
             >
               <Text style={[styles.rotateIcon, { color: playerColor }]}>↻</Text>
             </TouchableOpacity>
@@ -349,10 +379,12 @@ export function GameScreen({ playerCount, onEndGame }: Props) {
         ) : (
           <>
             <Text style={[styles.turnText, { color: playerColor }]}>
-              {playerName}'s turn
+              {playerName}{botColor ? (isBotTurn ? ' (Bot)' : ' (You)') : ''}
             </Text>
             <Text style={[styles.actionText, { color: playerColor }]}>
-              {gameState.turnPhase === 'moveToken' ? 'Move token' : 'Place a peg'}
+              {isBotTurn
+                ? 'Thinking...'
+                : gameState.turnPhase === 'moveToken' ? 'Move token' : 'Place a peg'}
             </Text>
           </>
         )}
@@ -370,6 +402,12 @@ export function GameScreen({ playerCount, onEndGame }: Props) {
           </View>
         ))}
       </View>
+
+      {humanColor && (
+        <Text style={[styles.youAreText, { color: PLAYER_DISPLAY[humanColor].color }]}>
+          You are playing as {PLAYER_DISPLAY[humanColor].name}
+        </Text>
+      )}
 
       <Modal
         transparent
@@ -610,5 +648,12 @@ const styles = StyleSheet.create({
     color: COLORS.titleText,
     fontSize: 16,
     fontWeight: '600',
+  },
+  youAreText: {
+    fontSize: 12,
+    fontWeight: '600',
+    opacity: 0.7,
+    marginTop: 8,
+    letterSpacing: 0.5,
   },
 });

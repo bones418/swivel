@@ -6,12 +6,20 @@ import { MenuScreen } from './src/screens/MenuScreen';
 import { GameScreen } from './src/screens/GameScreen';
 import { AuthScreen } from './src/screens/AuthScreen';
 import { COLORS } from './src/constants/theme';
+import { PlayerColor } from './src/constants/players';
 
 type Screen = 'menu' | 'game' | 'auth';
 
 function AppNavigator() {
   const { loading } = useAuth();
   const [screen, setScreen] = useState<Screen>('menu');
+  const [botColor, setBotColor] = useState<PlayerColor | null>(null);
+
+  function handleStartBotGame() {
+    const humanColor: PlayerColor = Math.random() < 0.5 ? 'red' : 'blue';
+    setBotColor(humanColor === 'red' ? 'blue' : 'red');
+    setScreen('game');
+  }
 
   if (loading) {
     return (
@@ -25,7 +33,8 @@ function AppNavigator() {
     return (
       <GameScreen
         playerCount={2}
-        onEndGame={() => setScreen('menu')}
+        onEndGame={() => { setBotColor(null); setScreen('menu'); }}
+        botColor={botColor ?? undefined}
       />
     );
   }
@@ -38,7 +47,7 @@ function AppNavigator() {
 
   return (
     <MenuScreen
-      onStartGame={() => setScreen('game')}
+      onStartGame={handleStartBotGame}
       onShowAuth={() => setScreen('auth')}
     />
   );

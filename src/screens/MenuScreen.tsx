@@ -41,7 +41,7 @@ export function MenuScreen({ onStartGame, onShowAuth }: Props) {
           onPress={onStartGame}
           activeOpacity={0.7}
         >
-          <Text style={styles.menuButtonText}>Start Game</Text>
+          <Text style={styles.menuButtonText}>Player vs Bot</Text>
         </TouchableOpacity>
 
         {session ? (
